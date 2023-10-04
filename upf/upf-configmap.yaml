@@ -1,0 +1,415 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: upf-run
+  namespace: 5gc-upf
+data:
+  start.sh: |-
+    /root/dpdk-devbind.py -b vfio-pci 0000:05:10.1 0000:05:10.3 0000:05:10.5
+    if ! [ -f "/UPF/redis.data/spgw_mater.rdb" ]; then
+      cp /UPF/redis.data.init/spgw_mater.rdb /UPF/redis.data/spgw_mater.rdb
+    fi
+    rm /UPF/cfg/spp.cfg
+    cat /root/run/spp.cfg > /UPF/cfg/spp.cfg.1
+    rm /UPF/cfg/dpdk.cfg
+    cat /root/run/dpdk.cfg > /UPF/cfg/dpdk.cfg
+    rm /UPF/cfg/dpp.cfg
+    cat /root/run/dpp.cfg > /UPF/cfg/dpp.cfg
+    rm /UPF/cfg/mmld.cfg
+    cat /root/run/mmld.cfg > /UPF/cfg/mmld.cfg
+    rm /UPF/cfg/statd.cfg
+    cat /root/run/statd.cfg > /UPF/cfg/statd.cfg
+    rm /opt/stiSOP/conf/sopagt.cfg
+    cat /root/run/rd_master_spgw.conf > /UPF/cfg/rd_master_spgw.conf
+    cat /root/run/rd_master_spgw_a.info > /UPF/cfg/rd_master_spgw_a.info
+    cat /root/run/rd_master_spgw_b.info > /UPF/cfg/rd_master_spgw_b.info
+    N4_IP=`ifconfig eth0 |grep "inet " |awk '{print $2}'`
+    sed "s/0.0.0.0/$N4_IP/g" /UPF/cfg/spp.cfg.1 > /UPF/cfg/spp.cfg
+    /UPF/scripts/run_redis.sh
+    /usr/sbin/ntpd -u ntp:ntp -g
+    /opt/stiSOP/oamd.boot start
+    /opt/stiSOP/oamd.boot stop
+    /opt/stiSOP/oamd.boot start
+    /UPF/bin/redis-cli -s /tmp/.spgw_master.redis.sock -a 1234 -n 12 flushdb > /tmp/flushdb.txt
+
+  rd_master_spgw.conf: |-
+    #For This Node
+    include "/UPF/cfg/rd_master_spgw_a.info"
+    #For Common
+    include "/UPF/cfg/rd_common_spgw.info"
+    #For Master
+    logfile "/UPF/log/REDIS/spgw_master.log"
+    unixsocket "/tmp/.spgw_master.redis.sock"
+    dbfilename "spgw_mater.rdb"
+
+  rd_master_spgw_a.info: |-
+    bind 127.0.0.1
+    port 65530
+
+  rd_master_spgw_b.info: |-
+    bind 127.0.0.1
+    port 65530
+
+  dpdk.cfg: |-
+    [SYSTEM]
+    PKG_NAME=UPF
+    SYS_NAME=VUPF
+    PROC_NAME=DPDK
+
+    [TIMER]
+    RECON_INTERVAL=50 #100 msec
+    HANG_DURATION=60
+    ABNORMAL_DURATION=120
+    HEARBEAT_INTERVAL=300
+    RSP_WAIT=50
+
+    [LOG]
+    LOG_FILE=/UPF/log/DPP/dpdk.log
+    LOG_FLAG=Trace,Warning,Error,Log,Test,Timer,Devel,Maint,Debug,In/Out
+    LOG_MAX_SIZE=100
+    LOG_MAX_CNT=10
+
+    [CPU]
+    AVE=0
+
+    [RULE]
+    RULE_FILE=/UPF/cfg/rule.txt
+
+    [DPDK]
+    # SINGLE
+    #DPDK_ARGS=-c 15552 -n 4 -w 0000:60:10.0 -w 0000:60:10.2 -w 0000:60:10.0 --master-lcore=2 --log-level=10 --socket-mem=8192 -- --pfc 3 --pfc 1,2,4,6,8 --pfc 2,1,10,12,14 --pfc 0,0,10,12,14,16 --mst 2
+    #DPDK_ARGS=-c 7000007e -n 4 -w 0000:84:10.1  -w 0000:84:10.3 -w 0000:84:10.5 --master-lcore=1 --log-level=10 --socket-mem=8192,0,0,0 -- --pfc 3 --pfc 1,2,2,3,4 --pfc 2,1,5,6,28 --pfc 0,0,5,6,29,30 --mst 1
+    DPDK_ARGS=-c 1fe -n 4 -w 0000:05:10.1  -w 0000:05:10.3 -w 0000:05:10.5 --master-lcore=1 --log-level=10 --socket-mem=8192,0 -- --pfc 3 --pfc 1,2,2,3,4 --pfc 2,1,5,6,7 --pfc 0,0,5,6,7,8 --mst 1
+    BOND=0
+    S1U=1
+    SGI=2
+    SGI2=0
+
+    [PORT]
+    IPV4_S1U=10.100.30.32
+    IPV4_SGI=10.100.60.32
+    IPV4_SGI2=10.100.60.32
+    VLAN_S1U=3000
+    VLAN_SGI=4000
+    VLAN_SGI2=0
+
+    IPV4_S1U_GW=10.100.30.1
+    IPV4_SGI_GW=10.100.60.1
+    IPV4_SGI2_GW=10.100.60.1
+
+    PCAP_PATH=/tmp
+
+    [PCAP]
+    PCAP_PATH=/tmp
+
+    [FREE]
+    DNS=1
+    ICMP=1
+    TCP_SIGNAL=1
+    TCP_RETRANS=1
+
+    [GC]
+    UDP=120
+    TCP=3600
+    ICMP=60
+
+    [GCB]
+    UDP=60
+    TCP=60
+    ICMP=60
+
+    [BAR]
+    IDLE_TIME=300
+
+    [RA]
+    VALID_LIFETIME=4294967295
+    PREFERRED_LIFETIME=4294967295
+    DNS1=2001:e60:e000::19e
+    DNS2=2001:e60:e100::341
+
+    [CDR]
+    MOD_RESET_VOL=1
+
+  sopagt.cfg: |-
+    ##### for EMS connection
+    # changing addr or port, must restart sopagt
+    manager-addr = 220.123.31.30
+    mmc-port   = 20210
+    event-port = 20211
+
+    ##### for IPC connection
+    # changing ipc-type, must restart sopagt
+    ipc-type = 1 # 0:NONE, 1:UDP, 2:TCP, 3:EPOINT (+10: use padding)
+    # for EPOINT (cluster-name, sopagt-svc-name, mp-svc-orgclass-no : mp-svc-name, ...)
+    epoint = #SVC, SOPA, 2:MMLD, 5:STATD
+
+    ##### for MML
+    sys-group-name = TB_UPF
+    EMS_MML_CFG_NAME = /opt/stiSOP/conf/mml.cfg
+    # MML for sopagt (mml : cmd-no : mml-data) ref. EMS_MML_CFG_NAME
+    MML = HELP:0, DIS-SYS:6001, DIS-VER:0:/path, DIS-CPU:6011, DIS-MEM:6013, DIS-FS:6015, DIS-NIC:6017, DIS-RESC:0, DIS-PROC:6031, START-PROC:6033, STOP-PROC:6035, RESTART-PROC:6037, CHG-LOG-PROC:0, DIS-NTP:0, ADD-NTP:0, DEL-NTP:0, DIS-LOGWORD:0, ADD-LOGWORD:0, DEL-LOGWORD:0, DIS-DELTOOL:0, ADD-DELTOOL:0, DEL-DELTOOL:0, DIS-BACKUP:0:/path, BACKUP:0:/path, RESTORE:0:/path, REBOOT:0
+    new-mmlpod   = 1, 0 # MML-style(0:OLD), POD-tab
+    ipv6         = 1 # 0:OFF
+    version      = R1.0.0
+    release-date = 2023-06-01
+    #mmi-port     = 20010
+    #mmi-passwd   = admin
+
+    ##### for SYSSTAT
+    stat-get-period = 15
+    stat-snd-period = 15
+
+    # SOP-EXTEND for sopagt (subtype-no=0 is not use)
+    # SYS-STAT/EVENT (name : subtype-no : payload-id : location)
+    SE-SYSSTAT = PROC:2:2, THREAD:0:0, CPU:3:11, MEM:3:13, RAM:0:0, DISK:0:0, FS:3:14, NIC:3:15:35, PS:0:0, FAN:0:0, TEMP:0:0, CTRL:0:0, SW:0:0, NTP:0:0, FD:3:26, IO:0:0, NETAPP:0:0, LOGMON:0
+
+    # add '/' at the end of name, watch thread-hang
+    dupproc = scan, sopagt, spp ,dpp ,hap ,mmld, statd
+    dupkeys = # use it when dupproc is not enough.
+
+    NOT_USED_NIC = #em2, em3, em4
+    ##### for PM
+    SE-PM-TERM = 5 # MINUTE (0: disabled)
+    # PM-MSG (name : subtype-no)
+    SE-PM = CPU:3, MEM:4, DISK:5
+
+    ##### for LOG
+    LOG_CFG_PATH = /var/log/stiLOG/salog.cfg
+    log-dump     = 0 # 0:OFF
+
+
+  spp.cfg: |-
+    [SYSTEM]
+    PKG_NAME=UPF
+    SYS_NAME=VUPF
+    PROC_NAME=SPP
+    #SYS_NO=0
+    SYS_HOST_1=vupf1
+    SYS_HOST_2=vupf2
+
+    [LICENSE]
+    LIC_SO_PATH=/lib/5gc-license
+
+    [TIMER]
+    RECON_INTERVAL=50 #100 msec
+    HANG_DURATION=60
+    ABNORMAL_DURATION=300
+    HEARBEAT_INTERVAL=600
+    #HEARBEAT_INTERVAL=1800
+    RSP_WAIT=20 #100 msec
+    #DUP_HOLD_TIME=3600 #100 msec
+    #DUP_HOLD_TIME=1200 #100 msec
+    DUP_HOLD_TIME=600 #100 msec
+
+    [LOG]
+    LOG_FILE=/UPF/log/SPP/spp.log
+    #LOG_FLAG=Warning,Error,Trace
+    LOG_FLAG=Trace,Warning,Error,Log,Test,Timer,Devel,Maint,Debug,In/Out
+    LOG_MAX_SIZE=100
+    LOG_MAX_CNT=10
+
+    [JDR]
+    JDRCnt=0
+    JDRFile1=UPF_STAT_UPF_N4_CLOG
+    JDRWriteDir1=/UPF/data/Doing
+    JDRMoveDir1=/UPF/data/Done
+    JDRSplitPeriod1=5
+    JDRExtern1=
+    JDRHeader1=
+
+    [N4]
+    SIG_IP=192.168.40.35
+    SIG_PORT=8805
+    NODE_ID=1
+
+    [RDB]
+    DB_PFD_NUM=11
+    DB_SESS_NUM=12
+    DB_SESS_PORT=65530
+    DB_SESS_IP=127.0.0.1
+    DB_SESS_PASS=1234
+
+    [USER_PLANE]
+    N4U_IP=0.0.0.0
+    N3U_IP=10.100.30.32
+    N9U_IP=25.0.0.30
+    N19U_IP=25.0.0.31
+
+    [UPF_FEATURES]
+    TREU=0
+    HEEU=0
+    PFDM=1
+    FTUP=1
+    TRST=1
+    DLBD=0
+    DDND=0
+    BUCP=0
+    PFDE=1
+    FRRT=0
+    TRAC=0
+    QUOA=0
+    UDBC=0
+    PDIU=1
+    EMPU=0
+
+  dpp.cfg: |-
+    [SYSTEM]
+    PKG_NAME=UPF
+    SYS_NAME=VUPF
+    PROC_NAME=DPP
+    #SYS_NO=0
+    SYS_HOST_1=vupf1
+    SYS_HOST_2=vupf2
+
+    [LICENSE]
+    LIC_SO_PATH=/lib/5gc-license
+
+    [TIMER]
+    RECON_INTERVAL=50 #100 msec
+    HANG_DURATION=60
+    ABNORMAL_DURATION=300
+    HEARBEAT_INTERVAL=600
+    #HEARBEAT_INTERVAL=1800
+    RSP_WAIT=20 #100 msec
+    #DUP_HOLD_TIME=3600 #100 msec
+    #DUP_HOLD_TIME=1200 #100 msec
+    DUP_HOLD_TIME=600 #100 msec
+
+
+    [LOG]
+    LOG_FILE=/UPF/log/DPP/dpp.log
+    #LOG_FLAG=Warning,Error,Trace
+    #LOG_FLAG=Warning,Error,Trace,Debug
+    #LOG_FLAG=Warning,Error,Trace,Debug,In/Out
+    LOG_FLAG=Trace,Warning,Error,Log,Test,Timer,Devel,Maint,Debug,In/Out
+    LOG_MAX_SIZE=100
+    LOG_MAX_CNT=10
+
+    [RDB]
+    DB_PFD_NUM=11
+    DB_SESS_NUM=12
+    DB_SESS_PORT=65530
+    DB_SESS_IP=127.0.0.1
+    DB_SESS_PASS=1234
+
+
+    [JDR]
+    JDRCnt=0
+    JDRFile1=UPF_STAT_UPF_N4_CLOG
+    JDRWriteDir1=/UPF/data/Doing
+    JDRMoveDir1=/UPF/data/Done
+    JDRSplitPeriod1=5
+    JDRExtern1=
+    JDRHeader1=
+
+    [DPDK]
+    DPDK_CFG_FILE=/UPF/cfg/dpdk.cfg
+
+  mmld.cfg: |-
+    [SYSTEM]
+    PKG_NAME=UPF
+    SYS_NAME=VUPF
+    PROC_NAME=MMLD
+    #SYS_NO=0
+    SYS_HOST_1=vupf1
+    SYS_HOST_2=vupf2
+
+    [TIMER]
+    RECON_INTERVAL=50 #100 msec
+    HANG_DURATION=60
+    ABNORMAL_DURATION=300
+    HEARBEAT_INTERVAL=600
+    #HEARBEAT_INTERVAL=1800
+    RSP_WAIT=20 #100 msec
+    #DUP_HOLD_TIME=3600 #100 msec
+    #DUP_HOLD_TIME=1200 #100 msec
+    DUP_HOLD_TIME=600 #100 msec
+
+    [LOG]
+    LOG_FILE=/UPF/log/MMLD/mmld.log
+    #LOG_FLAG=Warning,Error,Trace
+    #LOG_FLAG=Warning,Error,Trace,Debug
+    #LOG_FLAG=Warning,Error,Trace,Debug,In/Out
+    LOG_FLAG=Trace,Warning,Error,Log,Test,Timer,Devel,Maint,Debug,In/Out
+    LOG_MAX_SIZE=100
+    LOG_MAX_CNT=10
+
+    [RDB]
+    DB_PATH=/tmp/.spgw_master.redis.sock
+    MML_DB_NUM=1
+    DB_PFD_NUM=11
+    DB_SESS_NUM=12
+    DB_SESS_PORT=65530
+    DB_SESS_IP=127.0.0.1
+    DB_SESS_PASS=1234
+
+    [JDR]
+    JDRCnt=1
+    JDRFile1=UPF_STAT_SVC_CNT
+    JDRWriteDir1=/UPF/data/Doing
+    JDRMoveDir1=/UPF/data/Done
+    JDRSplitPeriod1=5
+    JDRExtern1=
+
+  statd.cfg: |-
+    [SYSTEM]
+    PKG_NAME=UPF
+    SYS_NAME=VUPF
+    PROC_NAME=STATD
+    #SYS_NO=0
+    SYS_HOST_1=vupf1
+    SYS_HOST_2=vupf2
+
+    [TIMER]
+    RECON_INTERVAL=50 #100 msec
+    HANG_DURATION=60
+    ABNORMAL_DURATION=300
+    HEARBEAT_INTERVAL=600
+    #HEARBEAT_INTERVAL=1800
+    RSP_WAIT=20 #100 msec
+    DUP_HOLD_TIME=600 #100 msec
+
+    [LOG]
+    LOG_FILE=/UPF/log/STATD/statd.log
+    #LOG_FLAG=Warning,Error,Trace
+    #LOG_FLAG=Warning,Error,Trace,Debug
+    #LOG_FLAG=Warning,Error,Trace,Debug,In/Out
+    LOG_FLAG=Trace,Warning,Error,Log,Test,Timer,Devel,Maint,Debug,In/Out
+    LOG_MAX_SIZE=100
+    LOG_MAX_CNT=10
+
+    [RDB]
+    MML_DB_NUM=1
+    DB_PATH=/tmp/.spgw_master.redis.sock
+
+    [JDR]
+    JDRCnt=2
+    JDRFile1=UPF_STAT_SVC_CNT
+    JDRWriteDir1=/UPF/data/Doing
+    JDRMoveDir1=/UPF/data/Done
+    JDRSplitPeriod1=5
+    JDRExtern1=
+    JDRFile2=UPF_STAT_PFCP_TPS
+    JDRWriteDir2=/UPF/data/Doing
+    JDRMoveDir2=/UPF/data/Done
+    JDRSplitPeriod2=5
+    JDRExtern2=
+
+    [STAT]
+    STAT_PREF_CNT=6
+    STAT_PREF_0=UPF_STAT_PFCP_OPER
+    STAT_TYPE_0=STAT_PFCP_OPER
+    STAT_PREF_1=UPF_STAT_PFCP_TPS
+    STAT_TYPE_1=STAT_PFCP_TPS
+    STAT_PREF_2=UPF_STAT_SVC_CNT
+    STAT_TYPE_2=STAT_SVC_CNT
+    STAT_PREF_3=UPF_STAT_GTPU_OPER
+    STAT_TYPE_3=STAT_GTPU_OPER
+    STAT_PREF_4=UPF_STAT_TRAFFIC
+    STAT_TYPE_4=STAT_TRAFFIC
+    STAT_PREF_5=UPF_STAT_DATA_DROP
+    STAT_TYPE_5=STAT_DATA_DROP
+    PREF_GATH=Gathered
+    PREF_DONE=Done
+    PREF_ERR=Error
+    STAT_PATH=/UPF/data/

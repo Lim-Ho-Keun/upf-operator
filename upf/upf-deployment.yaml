@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: upf1
+  namespace: 5gc-upf
+spec:
+  selector:
+    matchLabels:
+      app: upf1
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: upf1
+      annotations:
+        k8s.v1.cni.cncf.io/networks: eno4-n4-upf
+    spec:
+      hostname: upf1
+      containers:
+      - name: upf1-container
+        command: [ "/bin/bash", "-c", "--" ]
+        args: [ "/root/run/start.sh; while true; do sleep 100000; done;" ]
+        image: private.el:5000/upf:0.0.6
+        imagePullPolicy: Always
+        resources:
+          limits:
+            hugepages-1Gi: 8Gi
+            memory: 14Gi
+            cpu: 7000m
+          requests:
+            hugepages-1Gi: 8Gi
+            memory: 14Gi
+            cpu: 7000m
+        securityContext:
+          privileged: true
+        volumeMounts:
+          - name: hugepages
+            mountPath: /dev/hugepages
+          - name: modules
+            mountPath: /lib/modules
+          - name: pci
+            mountPath: /sys/bus/pci
+          - name: devices
+            mountPath: /sys/devices
+          - name: dev
+            mountPath: /dev
+          - name: redis-upf
+            mountPath: /UPF/redis.data
+          - name: upf-run
+            mountPath: /root/run/
+          - name: upf-log
+            mountPath: /UPF/log
+          - name: 5gc-license
+            mountPath: /lib/5gc-license
+      volumes:
+      - name: hugepages
+        hostPath:
+          path: /dev/hugepages
+      - name: modules
+        hostPath:
+          path: /lib/modules
+      - name: pci
+        hostPath:
+          path: /sys/bus/pci
+      - name: devices
+        hostPath:
+          path: /sys/devices
+      - name: dev
+        hostPath:
+          path: /dev
+      - name: redis-upf
+        hostPath:
+          path: /home/5GTB/redis/upf
+      - name: upf-log
+        hostPath:
+          path: /home/5GTB/asu/log/UPF
+      - name: upf-run
+        configMap:
+          name: upf-run
+          defaultMode: 0770
+      - name: 5gc-license
+        hostPath:
+          path: /lib/5gc-license
+

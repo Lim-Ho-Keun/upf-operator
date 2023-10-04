@@ -1,0 +1,13 @@
+apiVersion: fiveg.kt.com/v1alpha1
+kind: UPF
+metadata:
+  labels:
+    app.kubernetes.io/name: upf
+    app.kubernetes.io/instance: upf-sample
+    app.kubernetes.io/part-of: upf-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: upf-operator
+  name: upf-sample
+  namespace: 5gc-upf
+spec:
+  # TODO(user): Add fields here

@@ -1,0 +1,22 @@
+apiVersion: "k8s.cni.cncf.io/v1"
+kind: NetworkAttachmentDefinition
+metadata:
+  name: eno4-n4-upf
+  namespace: 5gc-upf
+spec:
+  config: '{
+     "cniVersion": "0.3.1",
+     "type": "macvlan",
+     "mode": "bridge",
+     "device": "eno4",
+     "ipam": {
+       "type": "static",
+       "addresses": [{
+               "address": "192.168.40.35/24"
+       }],
+       "routes": [
+                   { "dst": "192.168.40.0/24" }
+       ]
+     }
+ }'
+
